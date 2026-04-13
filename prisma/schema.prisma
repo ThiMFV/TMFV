@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Keyword {
+  id        String   @id @default(cuid())
+  term      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Channel {
+  id        String      @id @default(cuid())
+  name      String
+  type      ChannelType
+  url       String      // URL do RSS feed ou identificador da API
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model Subscriber {
+  id          String        @id @default(cuid())
+  email       String        @unique
+  name        String?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  newsletters NewsletterRecipient[]
+}
+
+model Newsletter {
+  id          String    @id @default(cuid())
+  title       String
+  subject     String
+  htmlContent String    @db.Text
+  sentAt      DateTime?
+  status      NewsletterStatus @default(DRAFT)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  articles    Article[]
+  recipients  NewsletterRecipient[]
+}
+
+model Article {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?    @db.Text
+  url          String
+  source       String
+  publishedAt  DateTime
+  newsletterId String?
+  newsletter   Newsletter? @relation(fields: [newsletterId], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model NewsletterRecipient {
+  id           String     @id @default(cuid())
+  newsletterId String
+  subscriberId String
+  newsletter   Newsletter @relation(fields: [newsletterId], references: [id])
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+  sentAt       DateTime?
+  openedAt     DateTime?
+
+  @@unique([newsletterId, subscriberId])
+}
+
+enum ChannelType {
+  RSS
+  NEWSAPI
+}
+
+enum NewsletterStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
+}
