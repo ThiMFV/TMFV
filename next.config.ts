@@ -7,9 +7,8 @@ const nextConfig: NextConfig = {
         ? process.env.ALLOWED_ORIGINS.split(",")
         : ["localhost:3000"],
     },
+    serverComponentsExternalPackages: ["@prisma/client", "bcryptjs"],
   },
-  // Evita logs do Prisma no bundle do cliente
-  serverExternalPackages: ["@prisma/client", "bcryptjs"],
 };
 
 export default nextConfig;
