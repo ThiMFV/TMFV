@@ -37,6 +37,7 @@ export default function LoginPage() {
       if (token) {
         localStorage.setItem('gastrocontrol_token', token)
       }
+      router.refresh()
       router.push('/dashboard')
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } }
