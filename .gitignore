@@ -14,7 +14,7 @@ build/
 .env.*.local
 
 # Prisma
-prisma/migrations/
+
 
 # Logs
 npm-debug.log*
@@ -29,3 +29,5 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+.claude/worktrees/
+tsconfig.tsbuildinfo
