@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/db";
-import { AppHeader } from "@/components/app-header";
+import { TopBar } from "@/components/top-bar";
+import { BrandHeader } from "@/components/brand-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
@@ -128,11 +129,12 @@ export default async function DashboardPage() {
     .slice(0, 8);
 
   return (
-    <div className="min-h-screen">
-      <Suspense fallback={<div className="h-14 border-b" />}>
-        <AppHeader />
+    <div className="min-h-screen bg-muted/20">
+      <Suspense fallback={<div className="h-12 bg-[#1f2937]" />}>
+        <TopBar />
       </Suspense>
-      <div className="container space-y-6 py-6">
+      <BrandHeader />
+      <div className="mx-auto max-w-[1480px] space-y-6 px-6 py-6">
         <header>
           <h1 className="text-2xl font-semibold tracking-tight">
             Dashboard Executivo

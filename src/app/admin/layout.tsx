@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { AppHeader } from "@/components/app-header";
+import { TopBar } from "@/components/top-bar";
+import { BrandHeader } from "@/components/brand-header";
 import {
   Tag,
   Newspaper,
@@ -25,11 +26,12 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <Suspense fallback={<div className="h-14 border-b" />}>
-        <AppHeader />
+    <div className="min-h-screen bg-muted/20">
+      <Suspense fallback={<div className="h-12 bg-[#1f2937]" />}>
+        <TopBar />
       </Suspense>
-      <div className="container grid gap-6 py-6 md:grid-cols-[200px_minmax(0,1fr)]">
+      <BrandHeader />
+      <div className="mx-auto grid max-w-[1480px] gap-6 px-6 py-6 md:grid-cols-[200px_minmax(0,1fr)]">
         <aside className="space-y-1">
           <h2 className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Administração

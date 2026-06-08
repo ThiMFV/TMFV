@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 type Sector = { slug: string; name: string };
@@ -13,19 +12,17 @@ export function SectorTabs({
   sectors: Sector[];
   current: string;
 }) {
-  const pathname = usePathname();
-  const search = pathname.split("?")[1] ? `?${pathname.split("?")[1]}` : "";
   return (
-    <nav className="border-b bg-card/50">
-      <div className="container flex gap-1 overflow-x-auto scrollbar-thin">
+    <nav className="border-b bg-card">
+      <div className="mx-auto flex max-w-[1480px] gap-1 overflow-x-auto px-6 scrollbar-thin">
         {sectors.map((s) => {
           const active = s.slug === current;
           return (
             <Link
               key={s.slug}
-              href={`/intelligence/${s.slug}${search}`}
+              href={`/intelligence/${s.slug}`}
               className={cn(
-                "relative whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors",
+                "relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors",
                 active
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground",
