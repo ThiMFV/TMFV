@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lorinvest Newsletter",
-  description: "Plataforma de newsletter do Grupo Lorinvest",
+  title: "GastroControl",
+  description: "Sistema de Gestão para Redes de Restaurantes",
 };
 
 export default function RootLayout({
