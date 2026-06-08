@@ -1,24 +1,50 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db/client";
+import { NextResponse } from "next/server";
 import { z } from "zod";
+import { prisma } from "@/lib/db";
 
-const createSchema = z.object({
-  term: z.string().min(1).max(100),
-});
+export const runtime = "nodejs";
 
-export async function GET() {
-  const keywords = await prisma.keyword.findMany({ orderBy: { term: "asc" } });
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const themeId = url.searchParams.get("themeId") ?? undefined;
+  const sectorSlug = url.searchParams.get("sector") ?? undefined;
+  const keywords = await prisma.keyword.findMany({
+    where: {
+      ...(themeId ? { themeId } : {}),
+      ...(sectorSlug ? { theme: { sector: { slug: sectorSlug } } } : {}),
+    },
+    include: { theme: { include: { sector: true } } },
+    orderBy: [{ theme: { sector: { order: "asc" } } }, { term: "asc" }],
+  });
   return NextResponse.json(keywords);
 }
 
-export async function POST(req: NextRequest) {
+const createSchema = z.object({
+  themeId: z.string(),
+  term: z.string().min(1),
+  requireAll: z.array(z.string()).optional(),
+  excludeAny: z.array(z.string()).optional(),
+  titleOnly: z.boolean().optional(),
+});
+
+export async function POST(req: Request) {
   const body = await req.json();
-  const parsed = createSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const keyword = await prisma.keyword.create({ data: { term: parsed.data.term } });
-  return NextResponse.json(keyword, { status: 201 });
+  const data = createSchema.parse(body);
+  const keyword = await prisma.keyword.upsert({
+    where: { themeId_term: { themeId: data.themeId, term: data.term } },
+    update: {
+      requireAll: data.requireAll ?? [],
+      excludeAny: data.excludeAny ?? [],
+      titleOnly: data.titleOnly ?? false,
+      active: true,
+    },
+    create: {
+      themeId: data.themeId,
+      term: data.term,
+      requireAll: data.requireAll ?? [],
+      excludeAny: data.excludeAny ?? [],
+      titleOnly: data.titleOnly ?? false,
+    },
+  });
+  return NextResponse.json(keyword);
 }

@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Lorinvest Intelligence - Schema
+// Plataforma de monitoramento de noticias e inteligencia setorial.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,79 +10,263 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =====================================================================
+// Estrutura: Setores -> Temas (colunas) -> Keywords -> Noticias
+// =====================================================================
+
+model Sector {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  order       Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  themes      Theme[]
+  sources     SourceSector[]
+
+  @@index([order])
+}
+
+model Theme {
+  id          String     @id @default(cuid())
+  sectorId    String
+  slug        String
+  name        String
+  kind        ThemeKind  @default(STANDARD)
+  description String?
+  order       Int        @default(0)
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  sector         Sector             @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  keywords       Keyword[]
+  classifications NewsClassification[]
+
+  @@unique([sectorId, slug])
+  @@index([sectorId, order])
+}
+
+// PORTFOLIO e CONCORRENTES sao "exclusivos": noticia que casa com keyword
+// dessas colunas nao aparece em outras (regras 1 e 2 da spec).
+// IMPORTANTE nao recebe noticias diretamente (regra 4) - a coluna serve
+// como flag para itens marcados manualmente ou via heuristica de titulo.
+// INTERNACIONAL filtra por fontes marcadas como internacionais.
+enum ThemeKind {
+  PORTFOLIO
+  COMPETITOR
+  STANDARD
+  INTERNATIONAL
+  IMPORTANT
+}
+
 model Keyword {
+  id          String   @id @default(cuid())
+  themeId     String
+  term        String
+  // Combinacoes booleanas: termos a exigir (AND) e a excluir (NOT)
+  requireAll  String[] @default([])
+  excludeAny  String[] @default([])
+  // Quando true, casamento somente se aparecer no titulo
+  titleOnly   Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  theme       Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@unique([themeId, term])
+  @@index([themeId, active])
+}
+
+// =====================================================================
+// Fontes de dados
+// =====================================================================
+
+model Source {
+  id            String      @id @default(cuid())
+  name          String
+  type          SourceType
+  url           String      @unique
+  // Idioma principal (pt, en, es...); usado para a coluna Internacional
+  language      String      @default("pt")
+  international Boolean     @default(false)
+  active        Boolean     @default(true)
+  // Status operacional para painel de saude
+  status        SourceStatus @default(UNKNOWN)
+  lastSuccessAt DateTime?
+  lastErrorAt   DateTime?
+  lastError     String?
+  // Quantidade de fetchs e erros consecutivos para painel
+  fetchCount    Int         @default(0)
+  errorStreak   Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  sectors   SourceSector[]
+  newsItems NewsItem[]
+  runs      IngestionRun[]
+
+  @@index([active, status])
+}
+
+enum SourceType {
+  RSS
+  NEWSAPI
+  GNEWS
+  GOOGLE_NEWS_RSS
+  SCRAPER
+  MANUAL
+}
+
+enum SourceStatus {
+  ONLINE
+  DEGRADED
+  OFFLINE
+  UNKNOWN
+}
+
+// Fontes podem ser associadas a multiplos setores (ou a nenhum -> todos)
+model SourceSector {
+  sourceId String
+  sectorId String
+
+  source   Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sector   Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([sourceId, sectorId])
+}
+
+// =====================================================================
+// Noticias
+// =====================================================================
+
+model NewsItem {
+  id            String   @id @default(cuid())
+  // URL canonica - dedup
+  url           String   @unique
+  // Hash de titulo+url para dedup rapida e cross-source
+  fingerprint   String   @unique
+  title         String
+  rawContent    String?  @db.Text
+  excerpt       String?  @db.Text
+  author        String?
+  imageUrl      String?
+  publishedAt   DateTime
+  fetchedAt     DateTime @default(now())
+  language      String   @default("pt")
+  // Enriquecimento IA
+  aiSummary     String?  @db.Text
+  aiInsight     String?  @db.Text
+  category      NewsCategory?
+  sentiment     Sentiment?
+  relevance     Int?     // 0-100
+  // Marcadores do usuario
+  favorited     Boolean  @default(false)
+  important     Boolean  @default(false)
+  importantAuto Boolean  @default(false)
+  archived      Boolean  @default(false)
+  // Tags de palavras-chave que casaram
+  matchedTerms  String[] @default([])
+  // Source
+  sourceId      String
+  source        Source   @relation(fields: [sourceId], references: [id])
+
+  classifications NewsClassification[]
+
+  // Postgres full-text via raw SQL trigger - mantemos um campo tsvector
+  // criado por migration (search_vector). Apenas o campo escalar de texto
+  // concatenado para fallback "LIKE".
+  searchText    String?  @db.Text
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([sourceId])
+  @@index([important])
+  @@index([category])
+}
+
+enum NewsCategory {
+  MARKET
+  COMPETITION
+  REGULATION
+  ESG
+  INVESTMENTS
+  OPERATIONS
+  TECHNOLOGY
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+// Associa noticia <-> tema (uma noticia pode aparecer em varias colunas)
+model NewsClassification {
+  id           String   @id @default(cuid())
+  newsItemId   String
+  themeId      String
+  // Snapshot dos termos que dispararam a classificacao para auditoria
+  matchedTerms String[] @default([])
+  score        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  newsItem NewsItem @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
+  theme    Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@unique([newsItemId, themeId])
+  @@index([themeId, createdAt(sort: Desc)])
+}
+
+// =====================================================================
+// Runs de ingestao para painel de saude e auditoria
+// =====================================================================
+
+model IngestionRun {
+  id          String   @id @default(cuid())
+  sourceId    String?
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  status      RunStatus @default(RUNNING)
+  itemsFound  Int      @default(0)
+  itemsNew    Int      @default(0)
+  error       String?  @db.Text
+  triggeredBy String   @default("cron") // cron | manual | api
+
+  source Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([startedAt(sort: Desc)])
+  @@index([sourceId, startedAt(sort: Desc)])
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  ERROR
+}
+
+// =====================================================================
+// Usuarios e autenticacao (estrutura basica - Auth.js pode ser plugado depois)
+// =====================================================================
+
+model User {
   id        String   @id @default(cuid())
-  term      String   @unique
+  email     String   @unique
+  name      String?
+  role      UserRole @default(VIEWER)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Channel {
-  id        String      @id @default(cuid())
-  name      String
-  type      ChannelType
-  url       String      // URL do RSS feed ou identificador da API
-  active    Boolean     @default(true)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-}
-
-model Subscriber {
-  id          String        @id @default(cuid())
-  email       String        @unique
-  name        String?
-  active      Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  newsletters NewsletterRecipient[]
-}
-
-model Newsletter {
-  id          String    @id @default(cuid())
-  title       String
-  subject     String
-  htmlContent String    @db.Text
-  sentAt      DateTime?
-  status      NewsletterStatus @default(DRAFT)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  articles    Article[]
-  recipients  NewsletterRecipient[]
-}
-
-model Article {
-  id           String     @id @default(cuid())
-  title        String
-  description  String?    @db.Text
-  url          String
-  source       String
-  publishedAt  DateTime
-  newsletterId String?
-  newsletter   Newsletter? @relation(fields: [newsletterId], references: [id])
-  createdAt    DateTime   @default(now())
-}
-
-model NewsletterRecipient {
-  id           String     @id @default(cuid())
-  newsletterId String
-  subscriberId String
-  newsletter   Newsletter @relation(fields: [newsletterId], references: [id])
-  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
-  sentAt       DateTime?
-  openedAt     DateTime?
-
-  @@unique([newsletterId, subscriberId])
-}
-
-enum ChannelType {
-  RSS
-  NEWSAPI
-}
-
-enum NewsletterStatus {
-  DRAFT
-  SENDING
-  SENT
-  FAILED
+enum UserRole {
+  ADMIN
+  ANALYST
+  VIEWER
 }
