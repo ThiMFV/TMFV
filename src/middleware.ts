@@ -4,7 +4,8 @@ import { verifyToken } from '@/lib/auth/jwt'
 const PUBLIC_PATHS = [
   '/login',
   '/api/auth/login',
-  '/api/pdv/webhook', // webhook auth is handled separately
+  '/api/pdv/webhook',
+  '/api/setup',
 ]
 
 export function middleware(request: NextRequest) {
