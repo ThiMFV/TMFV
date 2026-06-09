@@ -16,18 +16,24 @@ function authorized(req: Request) {
   return auth === `Bearer ${secret}` || token === secret;
 }
 
-async function runSetup(opts: { resetSchema: boolean }) {
+async function runSetup(opts: { mode: "full" | "reset" | "seed-only" }) {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL ausente");
 
   const client = new Client({ connectionString: url });
   await client.connect();
   try {
-    if (opts.resetSchema) {
-      // pg.Client.query aceita SQL com multiplos statements.
+    if (opts.mode === "reset") {
+      // Limpa tudo (DROP SCHEMA public) - destrutivo, idempotente.
+      await client.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
       await client.query(schemaSql);
+      await client.query(seedSql);
+    } else if (opts.mode === "full") {
+      await client.query(schemaSql);
+      await client.query(seedSql);
+    } else {
+      await client.query(seedSql);
     }
-    await client.query(seedSql);
   } finally {
     await client.end();
   }
@@ -38,11 +44,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);
-  const mode = url.searchParams.get("mode") ?? "auto";
+  const rawMode = url.searchParams.get("mode") ?? "full";
+  const mode: "full" | "reset" | "seed-only" =
+    rawMode === "reset" || rawMode === "seed-only" ? rawMode : "full";
 
   try {
-    const resetSchema = mode === "full" || mode === "auto";
-    await runSetup({ resetSchema });
+    await runSetup({ mode });
 
     const [sectors, themes, keywords, sources, users] = await Promise.all([
       prisma.sector.count(),
